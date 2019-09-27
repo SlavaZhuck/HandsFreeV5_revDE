@@ -167,16 +167,6 @@
 			<locationURI>COM_TI_SIMPLELINK_CC13X2_26X2_SDK_INSTALL_DIR/source/ti/ble5stack/profiles/simple_profile/simple_gatt_profile.h</locationURI>
 		</link>
 		<link>
-			<name>Startup/board.c</name>
-			<type>1</type>
-			<locationURI>COM_TI_SIMPLELINK_CC13X2_26X2_SDK_INSTALL_DIR/source/ti/ble5stack/target/board.c</locationURI>
-		</link>
-		<link>
-			<name>Startup/ccfg_app_ble_rcosc_agama.c</name>
-			<type>1</type>
-			<locationURI>COM_TI_SIMPLELINK_CC13X2_26X2_SDK_INSTALL_DIR/source/ti/ble5stack/common/cc26xx/rcosc/ccfg_app_ble_rcosc_agama.c</locationURI>
-		</link>
-		<link>
 			<name>Startup/rom_init.c</name>
 			<type>1</type>
 			<locationURI>COM_TI_SIMPLELINK_CC13X2_26X2_SDK_INSTALL_DIR/source/ti/ble5stack/rom/agama_r1/rom_init.c</locationURI>
