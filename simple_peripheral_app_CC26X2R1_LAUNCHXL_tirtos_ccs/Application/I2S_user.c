@@ -27,49 +27,73 @@
     static I2S_Config i2sConfig;
     static sem_t semDataReadyForTreatment;
 
-      // This buffer will be continuously re-written
-      static int16_t readBuf[500];
-      // This data will be continuously sent out
-      static int16_t writeBuf[500] = {0};
+    // These buffers will successively be written, treated and sent out
+    static int16_t readBuf1[500];
+    static int16_t readBuf2[500];
+    static int16_t readBuf3[500];
+    static int16_t readBuf4[500];
+    static int16_t writeBuf1[500]={0};
+    static int16_t writeBuf2[500]={0};
+    static int16_t writeBuf3[500]={0};
+    static int16_t writeBuf4[500]={0};
 
-      static I2S_Transaction i2sRead;
-      static I2S_Transaction i2sWrite;
+    // These transactions will successively be part of the
+    // i2sReadList, the treatmentList and the i2sWriteList
+    static I2S_Transaction i2sRead1;
+    static I2S_Transaction i2sRead2;
+    static I2S_Transaction i2sRead3;
+    static I2S_Transaction i2sRead4;
+    static I2S_Transaction i2sWrite1;
+    static I2S_Transaction i2sWrite2;
+    static I2S_Transaction i2sWrite3;
+    static I2S_Transaction i2sWrite4;
 
-      List_List i2sReadList;
-      List_List i2sWriteList;
+    List_List i2sReadList;
+    List_List treatmentList;
+    List_List i2sWriteList;
 
-    static void writeCallbackFxn(I2S_Handle handle, int_fast16_t status, I2S_Transaction *transactionPtr)
-    {
+    static void writeCallbackFxn(I2S_Handle handle, int_fast16_t status, I2S_Transaction *transactionPtr) {
 
-          // Nothing to do here: the buffer(s) are queued in a ring list, the transfers are
-          // executed without any action from the application.
+        // We must remove the previous transaction (the current one is not over)
+        I2S_Transaction *transactionFinished = (I2S_Transaction*)List_prev(&transactionPtr->queueElement);
 
-          // We must consider the previous transaction (ok, when you have only one transaction it's the same)
-          I2S_Transaction *transactionFinished = (I2S_Transaction*)List_prev(&transactionPtr->queueElement);
+        if(transactionFinished != NULL){
+            // Remove the finished transaction from the write queue
+            List_remove(&i2sWriteList, (List_Elem*)transactionFinished);
 
-          if(transactionFinished != NULL)
-          {
-              // After an arbitrary number of completion of the transaction, we will stop writting
-              if(transactionFinished->numberOfCompletions >= 10)
-              {
+            // This transaction must now feed the read queue (we do not need anymore the data of this transaction)
+            transactionFinished->queueElement.next = NULL;
+            List_put(&i2sReadList, (List_Elem*)transactionFinished);
 
-                  // Note: You cannot use I2S_stopRead() / I2S_stopWrite() in the callback.
-                  // The execution of these functions is potentially blocking and can mess up the
-                  // system.
-
-                 // writeFinished = (bool)true;
-              }
-          }
+            // We need to queue a new transaction: let's take one in the treatment queue
+            I2S_Transaction *newTransaction = (I2S_Transaction*)List_head(&treatmentList);
+            if(newTransaction != NULL){
+                List_remove(&treatmentList, (List_Elem*)newTransaction);
+                newTransaction->queueElement.next = NULL;
+                List_put(&i2sWriteList, (List_Elem*)newTransaction);
+            }
+        }
     }
 
-    static void readCallbackFxn(I2S_Handle handle, int_fast16_t status, I2S_Transaction *transactionPtr)
-    {
+    static void readCallbackFxn(I2S_Handle handle, int_fast16_t status, I2S_Transaction *transactionPtr) {
 
+        // We must remove the previous transaction (the current one is not over)
+        I2S_Transaction *transactionFinished = (I2S_Transaction*)List_prev(&transactionPtr->queueElement);
 
+        if(transactionFinished != NULL){
+            // The finished transaction contains data that must be treated
+            List_remove(&i2sReadList, (List_Elem*)transactionFinished);
+            transactionFinished->queueElement.next = NULL;
+            List_put(&treatmentList, (List_Elem*)transactionFinished);
+
+            // Start the treatment of the data
+            //Semaphore_post(dataReadyForTreatment);
+
+            // We do not need to queue transaction here: writeCallbackFxn takes care of this :)
+        }
     }
 
-    static void errCallbackFxn(I2S_Handle handle, int_fast16_t status, I2S_Transaction *transactionPtr)
-    {
+    static void errCallbackFxn(I2S_Handle handle, int_fast16_t status, I2S_Transaction *transactionPtr) {
 
         // Handle the I2S error
     }
@@ -125,28 +149,53 @@
         i2sParams.samplingEdge          = I2S_SAMPLING_EDGE_RISING;
 
         i2sHandle = I2S_open(Board_I2S0, &i2sParams);
-        // Initialize the read-transactions
-        I2S_Transaction_init(&i2sRead);
-        i2sRead.bufPtr            = readBuf;
-        i2sRead.bufSize           = sizeof(readBuf);
-        List_put(&i2sReadList, (List_Elem*)&i2sRead);
-        List_tail(&i2sReadList)->next = List_head(&i2sReadList);// Read buffers are queued in a ring-list
-        List_head(&i2sReadList)->prev = List_tail(&i2sReadList);
 
-        I2S_setReadQueueHead(i2sHandle, &i2sRead);
+        // Initialize the read-transactions
+        I2S_Transaction_init(&i2sRead1);
+        I2S_Transaction_init(&i2sRead2);
+        I2S_Transaction_init(&i2sRead3);
+        I2S_Transaction_init(&i2sRead4);
+        i2sRead1.bufPtr            = readBuf1;
+        i2sRead2.bufPtr            = readBuf2;
+        i2sRead3.bufPtr            = readBuf3;
+        i2sRead4.bufPtr            = readBuf4;
+        i2sRead1.bufSize           = sizeof(readBuf1);
+        i2sRead2.bufSize           = sizeof(readBuf2);
+        i2sRead3.bufSize           = sizeof(readBuf3);
+        i2sRead4.bufSize           = sizeof(readBuf4);
+        List_clearList(&i2sReadList);
+        List_put(&i2sReadList, (List_Elem*)&i2sRead1);
+        List_put(&i2sReadList, (List_Elem*)&i2sRead2);
+        List_put(&i2sReadList, (List_Elem*)&i2sRead3);
+        List_put(&i2sReadList, (List_Elem*)&i2sRead4);
+
+        I2S_setReadQueueHead(i2sHandle, &i2sRead1);
 
         // Initialize the write-transactions
-        I2S_Transaction_init(&i2sWrite);
-        i2sWrite.bufPtr           = writeBuf;
-        i2sWrite.bufSize          = sizeof(writeBuf);
-        List_put(&i2sWriteList, (List_Elem*)&i2sWrite);
-        List_tail(&i2sWriteList)->next = List_head(&i2sWriteList); // Write buffers are queued in a ring-list
-        List_head(&i2sWriteList)->prev = List_tail(&i2sWriteList);
+        I2S_Transaction_init(&i2sWrite1);
+        I2S_Transaction_init(&i2sWrite2);
+        I2S_Transaction_init(&i2sWrite3);
+        I2S_Transaction_init(&i2sWrite4);
+        i2sWrite1.bufPtr           = writeBuf1;
+        i2sWrite2.bufPtr           = writeBuf2;
+        i2sWrite3.bufPtr           = writeBuf3;
+        i2sWrite4.bufPtr           = writeBuf4;
+        i2sWrite1.bufSize          = sizeof(writeBuf1);
+        i2sWrite2.bufSize          = sizeof(writeBuf2);
+        i2sWrite3.bufSize          = sizeof(writeBuf3);
+        i2sWrite4.bufSize          = sizeof(writeBuf4);
+        List_clearList(&i2sWriteList);
+        List_put(&i2sWriteList, (List_Elem*)&i2sWrite1);
+        List_put(&i2sWriteList, (List_Elem*)&i2sWrite2);
+        List_put(&i2sWriteList, (List_Elem*)&i2sWrite3);
+        List_put(&i2sWriteList, (List_Elem*)&i2sWrite4);
 
-        I2S_setWriteQueueHead(i2sHandle, &i2sWrite);
+        I2S_setWriteQueueHead(i2sHandle, &i2sWrite1);
+
+
         for(int16_t i = 0 ; i < 500; i++)
         {
-            writeBuf[i] = (int16_t)(32767*sin(2*M_PI*i/20));
+            writeBuf1[i] = (int16_t)(32767*sin(2*M_PI*i/20));
         }
 
 
@@ -167,6 +216,18 @@
 
 //    while(1)
 //    {
+//        I2S_Transaction i2sRead1;
+//        if(lastAchievedReadTransaction != NULL) {
 //
+//            // Need a critical section to be sure to have corresponding bufPtr and bufSize
+//            uintptr_t key = HwiP_disable();
+//            uint16_t *buf = lastAchievedReadTransaction->bufPtr;
+//            uint16_t bufLength = lastAchievedReadTransaction->bufSize / sizeof(uint16_t);
+//            HwiP_restore(key);
+//
+//            // My dummy data treatment...
+//            for(k=0; k<bufLength; k++) {buf[k] --;}
+//            for(k=0; k<bufLength; k++) {buf[k] ++;}
+//        }
 //    }
  }
