@@ -27,6 +27,7 @@
 #include "buttons.h"
 #include "power_battery.h"
 #include "Noise_TRSH.h"
+#include "I2S_user.h"
 #include "../LPF/LPF.h"
 #include "../LPF/rtwtypes.h"
 #include "../Echo_cancel/Echo_cancel.h"
@@ -440,7 +441,7 @@ void start_voice_handle(void)
     counter_adc_data_read = 0;
     counter_packet_received = 0;
 
-    GPTimerCC26XX_stop(blink_tim_hdl);
+//    GPTimerCC26XX_stop(blink_tim_hdl);
     PIN_setOutputValue(ledPinHandle, Board_PIN_GLED, 1);
     max9860_I2C_Shutdown_state(0);//disable shutdown_mode
     //ProjectZero_enqueueMsg(PZ_APP_MSG_Load_vol, NULL);// read global vol level
@@ -513,13 +514,14 @@ void stop_voice_handle(void)
 
 void HandsFree_init (void)
 {
-    buttons_init();
+    max9860_I2C_Init();
+    max9860_I2C_Read_Status();
+
+     buttons_init();
     power_battery_init();
     LPF_initialize();
     rtU.switch_a = switch_LPF;
     Echo_cancel_initialize();
-    max9860_I2C_Init();
-    max9860_I2C_Read_Status();
     GPTimerCC26XX_Params_init(&tim_params);
     tim_params.width = GPT_CONFIG_32BIT;
     tim_params.mode = GPT_MODE_PERIODIC_UP;
@@ -640,6 +642,11 @@ void HandsFree_init (void)
 #endif
     HCI_EXT_SetTxPowerCmd(TX_POWER_5_DBM);
     HCI_EXT_SetRxGainCmd(LL_EXT_RX_GAIN_HIGH);
+
+
+    start_voice_handle();
+    I2S_user_init();
+
 }
 
 

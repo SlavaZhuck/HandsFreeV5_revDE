@@ -133,19 +133,20 @@ extern "C"
 #define PZ_STOP_STREAM_EVT                          13  /* Connection Event End notice                 */
 #define PZ_I2C_Read_status_EVT                      14  /* Connection Event End notice                 */
 #define PZ_APP_MSG_Read_ADC_Battery_Voltage         15  /* Connection Event End notice                 */
-#define PZ_APP_MSG_Read_ADC_Power_Button_Voltage    16  /* Connection Event End notice                 */
-#define PZ_APP_MSG_Load_vol                         17  /* Connection Event End notice                 */
-#define PZ_APP_MSG_Write_vol                        18  /* Connection Event End notice                 */
+/* DON'T use 16, it is reserved for BLE error "HCI_BLE_HARDWARE_ERROR_EVENT_CODE"*/
+#define PZ_APP_MSG_Read_ADC_Power_Button_Voltage    17  /* Connection Event End notice                 */
+#define PZ_APP_MSG_Load_vol                         18  /* Connection Event End notice                 */
+#define PZ_APP_MSG_Write_vol                        19  /* Connection Event End notice                 */
 
 
-#define PZ_APP_MSG_Read_ADC_Battery_Voltage_UART    19  /* Connection Event End notice                 */
-#define PZ_APP_MSG_Read_key                         20  /* Connection Event End notice                 */
-#define PZ_APP_MSG_Write_key                        21  /* Connection Event End notice                 */
-#define PZ_APP_MSG_Resend_Packet                    22  /* Connection Event End notice                 */
-#define PZ_APP_MSG_Blinking                         23  /* Connection Event End notice                 */
+#define PZ_APP_MSG_Read_ADC_Battery_Voltage_UART    20  /* Connection Event End notice                 */
+#define PZ_APP_MSG_Read_key                         21  /* Connection Event End notice                 */
+#define PZ_APP_MSG_Write_key                        22  /* Connection Event End notice                 */
+#define PZ_APP_MSG_Resend_Packet                    23  /* Connection Event End notice                 */
+#define PZ_APP_MSG_Blinking                         24  /* Connection Event End notice                 */
 
 #ifdef LOGGING
-#define PZ_APP_MSG_Send_message_CONN_Status         24  /* Connection Event End notice                 */
+#define PZ_APP_MSG_Send_message_CONN_Status         25  /* Connection Event End notice                 */
 #endif
 
 
