@@ -128,25 +128,26 @@ extern "C"
 #define PZ_START_ADV_EVT                            7  /* Request advertisement start from task ctx   */
 #define PZ_SEND_PARAM_UPD_EVT                       8  /* Request parameter update req be sent        */
 #define PZ_CONN_EVT                                 9  /* Connection Event End notice                 */
-#define PZ_GET_FIRST_SOUND_FRAME                    11  /* Connection Event End notice                 */
-#define PZ_START_STREAM_EVT                         12  /* Connection Event End notice                 */
-#define PZ_STOP_STREAM_EVT                          13  /* Connection Event End notice                 */
-#define PZ_I2C_Read_status_EVT                      14  /* Connection Event End notice                 */
-#define PZ_APP_MSG_Read_ADC_Battery_Voltage         15  /* Connection Event End notice                 */
+#define PZ_WRITE_DATA_TO_I2S                        11  /* Connection Event End notice                 */
+#define PZ_READ_DATA_FROM_I2S                       12  /* Connection Event End notice                 */
+#define PZ_START_STREAM_EVT                         13  /* Connection Event End notice                 */
+#define PZ_STOP_STREAM_EVT                          14  /* Connection Event End notice                 */
+#define PZ_I2C_Read_status_EVT                      15  /* Connection Event End notice                 */
 /* DON'T use 16, it is reserved for BLE error "HCI_BLE_HARDWARE_ERROR_EVENT_CODE"*/
-#define PZ_APP_MSG_Read_ADC_Power_Button_Voltage    17  /* Connection Event End notice                 */
-#define PZ_APP_MSG_Load_vol                         18  /* Connection Event End notice                 */
-#define PZ_APP_MSG_Write_vol                        19  /* Connection Event End notice                 */
+#define PZ_APP_MSG_Read_ADC_Battery_Voltage         17  /* Connection Event End notice                 */
+#define PZ_APP_MSG_Read_ADC_Power_Button_Voltage    18  /* Connection Event End notice                 */
+#define PZ_APP_MSG_Load_vol                         19  /* Connection Event End notice                 */
+#define PZ_APP_MSG_Write_vol                        20  /* Connection Event End notice                 */
 
 
-#define PZ_APP_MSG_Read_ADC_Battery_Voltage_UART    20  /* Connection Event End notice                 */
-#define PZ_APP_MSG_Read_key                         21  /* Connection Event End notice                 */
-#define PZ_APP_MSG_Write_key                        22  /* Connection Event End notice                 */
-#define PZ_APP_MSG_Resend_Packet                    23  /* Connection Event End notice                 */
-#define PZ_APP_MSG_Blinking                         24  /* Connection Event End notice                 */
+#define PZ_APP_MSG_Read_ADC_Battery_Voltage_UART    21  /* Connection Event End notice                 */
+#define PZ_APP_MSG_Read_key                         22  /* Connection Event End notice                 */
+#define PZ_APP_MSG_Write_key                        23  /* Connection Event End notice                 */
+#define PZ_APP_MSG_Resend_Packet                    24  /* Connection Event End notice                 */
+#define PZ_APP_MSG_Blinking                         25  /* Connection Event End notice                 */
 
 #ifdef LOGGING
-#define PZ_APP_MSG_Send_message_CONN_Status         25  /* Connection Event End notice                 */
+#define PZ_APP_MSG_Send_message_CONN_Status         26  /* Connection Event End notice                 */
 #endif
 
 

@@ -10,7 +10,6 @@
 
 #define LOGGING
 //#define DEBUG_SINUS
-//#define DEBUG_LOGGING
 //#define SECOND_MICROPHONE
 
 #endif /* STARTUP_GENERALDEF_H_ */

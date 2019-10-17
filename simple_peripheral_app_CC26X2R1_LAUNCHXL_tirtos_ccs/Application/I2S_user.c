@@ -21,6 +21,7 @@
 /* Example/Board Header files */
 #include "Board.h"
 #include "project_zero.h"
+#include "HandsFree.h"
 
 
    static I2S_Handle i2sHandle;
@@ -28,69 +29,89 @@
     static sem_t semDataReadyForTreatment;
 
     // These buffers will successively be written, treated and sent out
-    static int16_t readBuf1[500];
-    static int16_t readBuf2[500];
-    static int16_t readBuf3[500];
-    static int16_t readBuf4[500];
-    static int16_t writeBuf1[500]={0};
-    static int16_t writeBuf2[500]={0};
-    static int16_t writeBuf3[500]={0};
-    static int16_t writeBuf4[500]={0};
+     int16_t readBuf1[I2S_SAMP_PER_FRAME];
+     int16_t readBuf2[I2S_SAMP_PER_FRAME];
+     int16_t readBuf3[I2S_SAMP_PER_FRAME];
+     int16_t readBuf4[I2S_SAMP_PER_FRAME];
+     int16_t writeBuf1[I2S_SAMP_PER_FRAME];
+     int16_t writeBuf2[I2S_SAMP_PER_FRAME];
+     int16_t writeBuf3[I2S_SAMP_PER_FRAME];
+     int16_t writeBuf4[I2S_SAMP_PER_FRAME];
 
     // These transactions will successively be part of the
-    // i2sReadList, the treatmentList and the i2sWriteList
-    static I2S_Transaction i2sRead1;
-    static I2S_Transaction i2sRead2;
-    static I2S_Transaction i2sRead3;
-    static I2S_Transaction i2sRead4;
-    static I2S_Transaction i2sWrite1;
-    static I2S_Transaction i2sWrite2;
-    static I2S_Transaction i2sWrite3;
-    static I2S_Transaction i2sWrite4;
+    // i2sReadList and the i2sWriteList
+     I2S_Transaction i2sRead1;
+     I2S_Transaction i2sRead2;
+     I2S_Transaction i2sRead3;
+     I2S_Transaction i2sRead4;
+     I2S_Transaction i2sWrite1;
+     I2S_Transaction i2sWrite2;
+     I2S_Transaction i2sWrite3;
+     I2S_Transaction i2sWrite4;
 
     List_List i2sReadList;
-    List_List treatmentList;
     List_List i2sWriteList;
+
+    extern uint32_t measure_tim_value;
+    extern uint8_t stream_on;
+    extern int16_t raw_data_received[I2S_SAMP_PER_FRAME];
+    extern int16_t mic_data_1ch[I2S_SAMP_PER_FRAME];
+    uint32 write_timestamps[100];
+    uint32 read_timestamps[100];
+
+    I2S_Transaction *write_transactionFinished;
+    I2S_Transaction *read_transactionFinished;
+    uint32 *write_but_pointer;
 
     static void writeCallbackFxn(I2S_Handle handle, int_fast16_t status, I2S_Transaction *transactionPtr) {
 
+        static uint32 I2S_write_timestamp = 0;
+        static uint32 I2S_write_counter = 0;
+
+        write_timestamps[I2S_write_counter % 100] = measure_tim_value - I2S_write_timestamp;
+
         // We must remove the previous transaction (the current one is not over)
-        I2S_Transaction *transactionFinished = (I2S_Transaction*)List_prev(&transactionPtr->queueElement);
+        write_transactionFinished = (I2S_Transaction*)List_prev(&transactionPtr->queueElement);
+        if(write_transactionFinished != NULL)
+        {
+            ProjectZero_enqueueMsg(PZ_WRITE_DATA_TO_I2S, NULL);
+            memcpy(write_transactionFinished->bufPtr  ,raw_data_received, sizeof(raw_data_received));
 
-        if(transactionFinished != NULL){
             // Remove the finished transaction from the write queue
-            List_remove(&i2sWriteList, (List_Elem*)transactionFinished);
-
-            // This transaction must now feed the read queue (we do not need anymore the data of this transaction)
-            transactionFinished->queueElement.next = NULL;
-            List_put(&i2sReadList, (List_Elem*)transactionFinished);
-
-            // We need to queue a new transaction: let's take one in the treatment queue
-            I2S_Transaction *newTransaction = (I2S_Transaction*)List_head(&treatmentList);
-            if(newTransaction != NULL){
-                List_remove(&treatmentList, (List_Elem*)newTransaction);
-                newTransaction->queueElement.next = NULL;
-                List_put(&i2sWriteList, (List_Elem*)newTransaction);
-            }
+            List_remove(&i2sWriteList, (List_Elem*)write_transactionFinished);
+            write_transactionFinished->queueElement.next = NULL;
+            List_put(&i2sWriteList, (List_Elem*)write_transactionFinished);
         }
+        I2S_write_timestamp = measure_tim_value;
+        I2S_write_counter++;
     }
 
     static void readCallbackFxn(I2S_Handle handle, int_fast16_t status, I2S_Transaction *transactionPtr) {
 
-        // We must remove the previous transaction (the current one is not over)
-        I2S_Transaction *transactionFinished = (I2S_Transaction*)List_prev(&transactionPtr->queueElement);
+        static uint32 I2S_read_timestamp = 0;
+        static uint32 I2S_read_counter = 0;
 
-        if(transactionFinished != NULL){
+        read_timestamps[I2S_read_counter % 100] = measure_tim_value - I2S_read_timestamp;
+
+        // We must remove the previous transaction (the current one is not over)
+        I2S_Transaction *read_transactionFinished = (I2S_Transaction*)List_prev(&transactionPtr->queueElement);
+
+        if(read_transactionFinished != NULL){
+            ProjectZero_enqueueMsg(PZ_READ_DATA_FROM_I2S, NULL);
+            memcpy(mic_data_1ch, read_transactionFinished->bufPtr, sizeof(mic_data_1ch));
             // The finished transaction contains data that must be treated
-            List_remove(&i2sReadList, (List_Elem*)transactionFinished);
-            transactionFinished->queueElement.next = NULL;
-            List_put(&treatmentList, (List_Elem*)transactionFinished);
+            List_remove(&i2sReadList, (List_Elem*)read_transactionFinished);
+            read_transactionFinished->queueElement.next = NULL;
+            List_put(&i2sReadList, (List_Elem*)read_transactionFinished);
 
             // Start the treatment of the data
             //Semaphore_post(dataReadyForTreatment);
 
             // We do not need to queue transaction here: writeCallbackFxn takes care of this :)
         }
+
+        I2S_read_timestamp = measure_tim_value;
+        I2S_read_counter++;
     }
 
     static void errCallbackFxn(I2S_Handle handle, int_fast16_t status, I2S_Transaction *transactionPtr) {
@@ -129,12 +150,10 @@
 
         I2S_init();
 
-        // Initialize the treatmentList (this list is initially empty)
-
         //Initialize I2S opening parameters
         I2S_Params_init(&i2sParams);
-        i2sParams.fixedBufferLength     = 1000;
-        i2sParams.samplingFrequency     = 16000,
+        i2sParams.fixedBufferLength     = I2S_SAMP_PER_FRAME * 2;
+        i2sParams.samplingFrequency     = 16000;
         i2sParams.writeCallback         = writeCallbackFxn ;
         i2sParams.readCallback          = readCallbackFxn ;
         i2sParams.errorCallback         = errCallbackFxn;
@@ -196,38 +215,35 @@
         for(int16_t i = 0 ; i < 500; i++)
         {
             writeBuf1[i] = (int16_t)(32767*sin(2*M_PI*i/20));
+            writeBuf2[i] = (int16_t)(32767*sin(2*M_PI*i/20));
+            writeBuf3[i] = (int16_t)(32767*sin(2*M_PI*i/20));
+            writeBuf4[i] = (int16_t)(32767*sin(2*M_PI*i/20));
+        }
+ }
+
+
+void I2S_start_transfers(void)
+{
+    I2S_startClocks(i2sHandle);
+    I2S_startWrite(i2sHandle);
+    I2S_startRead(i2sHandle);
+}
+
+
+void I2S_stop_transfers(void)
+{
+    if(stream_on == 1)
+    {
+        I2S_stopWrite(i2sHandle);
+        I2S_stopRead(i2sHandle);
+
+        volatile static uint32_t delay_i2S = 9600 * 2; //20ms * 2
+        while(delay_i2S>0)
+        {
+            delay_i2S--;
         }
 
+        I2S_stopClocks(i2sHandle);
+    }
+}
 
-        /*
-         * Prepare the semaphore
-         */
-              I2S_startClocks(i2sHandle);
-              I2S_startWrite(i2sHandle);
-              I2S_startRead(i2sHandle);
-//        int retc = sem_init(&semDataReadyForTreatment, 0, 0);
-//        if (retc == -1) {
-//            while (1);
-//        }
-
-
-
-    int k;
-
-//    while(1)
-//    {
-//        I2S_Transaction i2sRead1;
-//        if(lastAchievedReadTransaction != NULL) {
-//
-//            // Need a critical section to be sure to have corresponding bufPtr and bufSize
-//            uintptr_t key = HwiP_disable();
-//            uint16_t *buf = lastAchievedReadTransaction->bufPtr;
-//            uint16_t bufLength = lastAchievedReadTransaction->bufSize / sizeof(uint16_t);
-//            HwiP_restore(key);
-//
-//            // My dummy data treatment...
-//            for(k=0; k<bufLength; k++) {buf[k] --;}
-//            for(k=0; k<bufLength; k++) {buf[k] ++;}
-//        }
-//    }
- }

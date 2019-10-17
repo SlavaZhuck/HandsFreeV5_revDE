@@ -19,7 +19,7 @@
             </property>
             <property Type="choicelist" Value="1" id="The JTAG TCLK Frequency (MHz)">
                 <choice Name="Fixed with user specified value" value="SPECIFIC">
-                    <property Type="stringfield" Value="2MHz" id="-- Enter a value from 100.0kHz to 2.5MHz"/>
+                    <property Type="stringfield" Value="4MHz" id="-- Enter a value from 100.0kHz to 2.5MHz"/>
                 </choice>
             </property>
             <platform XML_version="1.2" id="platform_0">

@@ -57,13 +57,12 @@ static void AudioDuplex_disableCache();
 static void encrypt_packet(uint8_t *packet);
 static void decrypt_packet(uint8_t *packet);
 static void rt_OneStep(void);
-static void LPF_partial_processing ( uint16_t start_index, uint16_t stop_index, bool enable, bool first_buffer);
-static void EC_partial_processing ( uint16_t start_index, uint16_t stop_index, bool enable, bool first_buffer);
+static void LPF_processing ( int16_t * start_index, uint16_t size, bool enable);
+static void EC_processing ( uint16_t start_index, uint16_t stop_index, bool enable);
 static void Resend_BLEpacket_SwiFxn(UArg temp);
 static void start_voice_handle(void);
 static void stop_voice_handle(void);
 static void blink_timer_callback(GPTimerCC26XX_Handle handle, GPTimerCC26XX_IntMask interruptMask);
-static void samp_timer_callback(GPTimerCC26XX_Handle handle, GPTimerCC26XX_IntMask interruptMask);
 static void measure_timer_callback(GPTimerCC26XX_Handle handle, GPTimerCC26XX_IntMask interruptMask);
 /******local functions END***************************************************/
 
@@ -112,9 +111,9 @@ volatile static float packet_lost_percentage                = 0;
 volatile static uint32_t counter_packet_resend_attemps          = 0;
 volatile static uint32_t counter_packet_not_send          = 0;
 volatile static uint32_t skip_counter_packet_send           = 0;
-static GPTimerCC26XX_Value timestamp_TOTAL_start;
-static GPTimerCC26XX_Value timestamp_TOTAL_stop;
-volatile static GPTimerCC26XX_Value timestamp_TOTAL_dif;
+static GPTimerCC26XX_Value timestamp_read_data_from_I2S_start;
+static GPTimerCC26XX_Value timestamp_read_data_from_I2S_stop;
+volatile static GPTimerCC26XX_Value timestamp_read_data_from_I2S_dif;
 /* Debug measure variables END***************************************************/
 
 /***********LPF START****************************************************/
@@ -229,8 +228,8 @@ static uint8_t packet_data[DS_STREAM_OUTPUT_LEN];
 //    .currentStream          = &i2sStream
 //};
 
-static int16_t raw_data_received[I2S_SAMP_PER_FRAME];
-static int16_t mic_data_1ch[I2S_SAMP_PER_FRAME];
+ int16_t raw_data_received[I2S_SAMP_PER_FRAME];
+ int16_t mic_data_1ch[I2S_SAMP_PER_FRAME];
 
 #ifdef SECOND_MICROPHONE
 static int16_t mic_data[I2S_SAMP_PER_FRAME*2];
@@ -347,41 +346,27 @@ void rt_OneStep(void)
 }
 
 
-static void LPF_partial_processing ( uint16_t start_index, uint16_t stop_index, bool enable, bool first_buffer)
+static void LPF_processing ( int16_t * start_index, uint16_t size, bool enable)
 {
     static uint32_t timestamp_LPF_start = 0;
     static uint32_t timestamp_LPF_stop  = 0;
     static uint32_t timestamp_LPF_dif   = 0;
-    static uint32_t timestamp_LPF_prev  = 0;
 
     if(enable)
     {
         timestamp_LPF_start =  measure_tim_value;
 
         rtU.switch_a = switch_LPF;
-        for(uint16_t i = start_index ; i< stop_index; i++)
+        for(uint16_t i = 0 ; i < size; i++)
         {
             //raw_mic_data[i] = mic_data_1ch[i];
-            rtU.In1 = (float)mic_data_1ch[i];
+            rtU.In1 = (float)start_index[i];
             rt_OneStep();
-            mic_data_1ch[i] = (int16)rtY.Out1;
+            start_index[i] = (int16)rtY.Out1;
         }
+
         timestamp_LPF_stop =  measure_tim_value;
-        if(first_buffer)
-        {
-            if(timestamp_LPF_stop>=timestamp_LPF_start)
-            {
-                timestamp_LPF_prev = timestamp_LPF_stop - timestamp_LPF_start;
-            }
-        }
-        else
-        {
-            if(timestamp_LPF_stop>=timestamp_LPF_start)
-            {
-                timestamp_LPF_dif = timestamp_LPF_stop - timestamp_LPF_start + timestamp_LPF_prev;
-                timestamp_LPF_prev = 0;
-            }
-        }
+        timestamp_LPF_dif = timestamp_LPF_stop - timestamp_LPF_start;
     }
 }
 
@@ -449,7 +434,7 @@ void start_voice_handle(void)
     PIN_setOutputValue(ledPinHandle, Board_PIN_GLED, 1);
     GPTimerCC26XX_setLoadValue(samp_tim_hdl, (GPTimerCC26XX_Value)SAMP_TIME);
     GPTimerCC26XX_start(samp_tim_hdl);
-
+    GPTimerCC26XX_start(measure_tim_hdl);
     stream_on = 1;
 #ifdef LOGGING
     start_logging_clock();
@@ -457,6 +442,10 @@ void start_voice_handle(void)
 //    memset(&event_BLE_message, 0, sizeof(event_BLE_message)) ;
 //    memset(&event_BUF_status_message, 0, sizeof(event_BUF_status_message)) ;
 #endif
+
+    I2S_start_transfers();
+
+
 //    Watchdog_init();
 //    /* Create and enable a Watchdog with resets disabled */
 //    Watchdog_Params_init(&params);
@@ -480,6 +469,7 @@ void stop_voice_handle(void)
 //        Watchdog_clear(watchdogHandle);
 //        Watchdog_close(watchdogHandle);
 //    }
+    I2S_stop_transfers();
     max9860_I2C_Shutdown_state(1);//enable shutdown_mode
 #ifdef LOGGING
     stop_logging_clock();
@@ -505,7 +495,7 @@ void stop_voice_handle(void)
     memset ( mic_data_1ch, 0, sizeof(mic_data_1ch));
     memset ( &rtDW, 0, sizeof(rtDW) );
     /* save current volume level */
-    //ProjectZero_enqueueMsg(PZ_APP_MSG_Write_vol, NULL);
+    ProjectZero_enqueueMsg(PZ_APP_MSG_Write_vol, NULL);
     osal_snv_write(INIT_VOL_ADDR, 1, &current_volume);
     PIN_setOutputValue(ledPinHandle, Board_PIN_GLED, 0);
     GPTimerCC26XX_start(blink_tim_hdl);
@@ -514,14 +504,14 @@ void stop_voice_handle(void)
 
 void HandsFree_init (void)
 {
-    max9860_I2C_Init();
-    max9860_I2C_Read_Status();
-
-     buttons_init();
+    buttons_init();
+    I2S_user_init();
     power_battery_init();
     LPF_initialize();
     rtU.switch_a = switch_LPF;
     Echo_cancel_initialize();
+    max9860_I2C_Init();
+    max9860_I2C_Read_Status();
     GPTimerCC26XX_Params_init(&tim_params);
     tim_params.width = GPT_CONFIG_32BIT;
     tim_params.mode = GPT_MODE_PERIODIC_UP;
@@ -548,8 +538,6 @@ void HandsFree_init (void)
     if (samp_tim_hdl == NULL) {
         while (1);
     }
-    GPTimerCC26XX_setLoadValue(samp_tim_hdl, (GPTimerCC26XX_Value)SAMP_TIME);
-    GPTimerCC26XX_registerInterrupt(samp_tim_hdl, samp_timer_callback, GPT_INT_TIMEOUT);
 
     measure_tim_hdl = GPTimerCC26XX_open(Board_GPTIMER1A, &tim_params);
     if (measure_tim_hdl == NULL) {
@@ -579,10 +567,6 @@ void HandsFree_init (void)
     uartParams.readMode         = UART_MODE_CALLBACK;
 
     uartParams.writeMode        = UART_MODE_CALLBACK;
-#ifdef DEBUG_LOGGING
-    uartParams.writeMode        = UART_MODE_BLOCKING;
-    uartParams.writeTimeout      = UART_WAIT_FOREVER; //UART_WAIT_FOREVER
-#endif
     uartParams.readCallback     = UARTreadCallback;
     uartParams.writeCallback    = UARTwriteCallback;
     uartParams.readReturnMode   = UART_RETURN_FULL;
@@ -634,18 +618,9 @@ void HandsFree_init (void)
     HCI_EXT_ClkDivOnHaltCmd( HCI_EXT_DISABLE_CLK_DIVIDE_ON_HALT ); //Set whether the system clock will be divided when the MCU is halted. - may increase power consumption
     HCI_EXT_SetFastTxResponseTimeCmd(HCI_EXT_ENABLE_FAST_TX_RESP_TIME); // configure the Link Layer fast transmit response time feature
 
-#ifdef DEBUG_LOGGING
-   // start_voice_handle();
-    GPTimerCC26XX_setLoadValue(samp_tim_hdl, (GPTimerCC26XX_Value)SAMP_TIME);
-    GPTimerCC26XX_start(samp_tim_hdl);
-    GPTimerCC26XX_start(measure_tim_hdl);
-#endif
     HCI_EXT_SetTxPowerCmd(TX_POWER_5_DBM);
     HCI_EXT_SetRxGainCmd(LL_EXT_RX_GAIN_HIGH);
 
-
-    start_voice_handle();
-    I2S_user_init();
 
 }
 
@@ -703,20 +678,7 @@ void blink_timer_callback(GPTimerCC26XX_Handle handle, GPTimerCC26XX_IntMask int
 //    ProjectZero_enqueueMsg(PZ_APP_MSG_Blinking, NULL);
 }
 
-void samp_timer_callback(GPTimerCC26XX_Handle handle, GPTimerCC26XX_IntMask interruptMask)
-{
-//    Watchdog_clear(watchdogHandle);
-    if(stream_on)
-    {
-        ProjectZero_enqueueMsg(PZ_GET_FIRST_SOUND_FRAME, NULL);
-    }
-#ifdef DEBUG_LOGGING
-    counter_packet_received++;
-    send_log_message_to_UART_mailbox(PACKET_SENT_MESSAGE_TYPE);
-    counter_packet_received++;
-    send_log_message_to_UART_mailbox(PACKET_SENT_MESSAGE_TYPE);
-#endif
-}
+
 void measure_timer_callback(GPTimerCC26XX_Handle handle, GPTimerCC26XX_IntMask interruptMask)
 {
     measure_tim_value++;
@@ -758,12 +720,9 @@ void USER_task_Handler (pzMsg_t *pMsg)
             }
             break;
 
-        case PZ_GET_FIRST_SOUND_FRAME:
+        case PZ_WRITE_DATA_TO_I2S:
         {
-
-            /* start 10ms delay to request second part of MIC buffer*/
             /* process mailbox */
-            timestamp_TOTAL_start = measure_tim_value;
             mailpost_usage = Mailbox_getNumPendingMsgs(mailbox);
             if(mailpost_usage>0)
             {
@@ -782,7 +741,7 @@ void USER_task_Handler (pzMsg_t *pMsg)
                 ADPCMDecoderBuf2((char*)(packet_data), raw_data_received, &decoder_adpcm);
                 ADPCMDecoderBuf2((char*)(&packet_data[FRAME_SIZE / 4]), &raw_data_received[I2S_SAMP_PER_FRAME / 4], &decoder_adpcm);
                 ADPCMDecoderBuf2((char*)(&packet_data[FRAME_SIZE / 2]), &raw_data_received[I2S_SAMP_PER_FRAME / 2], &decoder_adpcm);
-                ADPCMDecoderBuf2((char*)(&packet_data[FRAME_SIZE* 3 / 4]), &raw_data_received[I2S_SAMP_PER_FRAME * 3 / 4], &decoder_adpcm);
+                ADPCMDecoderBuf2((char*)(&packet_data[FRAME_SIZE * 3 / 4]), &raw_data_received[I2S_SAMP_PER_FRAME * 3 / 4], &decoder_adpcm);
 
                 timestamp_decode_stop =  measure_tim_value;
                 timestamp_decode_dif = timestamp_decode_stop - timestamp_decode_start;
@@ -791,16 +750,20 @@ void USER_task_Handler (pzMsg_t *pMsg)
 
             }else{
                 memset ( packet_data,   0x00, sizeof(packet_data) );
+                memset ( raw_data_received,   0x00, sizeof(raw_data_received) );
+
                 i2c_read_delay++;
                 /* process first part of sound buffer*/
-                LPF_partial_processing ( 0 , I2S_SAMP_PER_FRAME / 2, enable_LPF, TRUE);
-                EC_partial_processing  ( 0 , I2S_SAMP_PER_FRAME / 2, enable_EC, TRUE);
             }
+        }
+        break;
 
+        case PZ_READ_DATA_FROM_I2S:
+        {
+            timestamp_read_data_from_I2S_start = measure_tim_value;
             counter_adc_data_read++;
             /* process second part of sound buffer*/
-            LPF_partial_processing ( I2S_SAMP_PER_FRAME / 2 , I2S_SAMP_PER_FRAME, enable_LPF, FALSE);
-            EC_partial_processing  ( I2S_SAMP_PER_FRAME / 2 , I2S_SAMP_PER_FRAME, enable_EC, FALSE);
+            LPF_processing ( mic_data_1ch, I2S_SAMP_PER_FRAME, enable_LPF);
 
             if(enable_NoiseGate)
             {
@@ -872,8 +835,9 @@ void USER_task_Handler (pzMsg_t *pMsg)
                 UART_ready = false;
                 UART_write(uart, uart_data_send, sizeof(uart_data_send));
             }
-            timestamp_TOTAL_stop = measure_tim_value;
-            timestamp_TOTAL_dif = timestamp_TOTAL_stop - timestamp_TOTAL_start;
+            timestamp_read_data_from_I2S_stop = measure_tim_value;
+            timestamp_read_data_from_I2S_dif  = timestamp_read_data_from_I2S_stop - timestamp_read_data_from_I2S_start;
+
         }
         break;
 
