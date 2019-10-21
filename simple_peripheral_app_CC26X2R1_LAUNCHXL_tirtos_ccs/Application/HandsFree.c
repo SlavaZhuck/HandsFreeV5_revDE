@@ -87,7 +87,6 @@ void watchdogCallback(uintptr_t unused)
 static GPTimerCC26XX_Params tim_params;
 static GPTimerCC26XX_Handle blink_tim_hdl = NULL;
 static GPTimerCC26XX_Handle measure_tim_hdl = NULL;
-static GPTimerCC26XX_Handle samp_tim_hdl = NULL;
 static GPTimerCC26XX_Value load_val[2] = {LOW_STATE_TIME, HIGH_STATE_TIME};
 uint32_t measure_tim_value = UINT_MAX/2   ; /* in ms */
 static bool blink = false;
@@ -418,8 +417,6 @@ void start_voice_handle(void)
 #endif
     measure_tim_value = 155;
     skip_counter_packet_send = 0;
-//    i2s_buffer_error_1 = 0;
-//    i2s_buffer_error_2 = 0;
     counter_packet_resend_attemps = 0;
     counter_packet_not_send = 0;
     counter_packet_send = 0;
@@ -428,12 +425,13 @@ void start_voice_handle(void)
 
 //    GPTimerCC26XX_stop(blink_tim_hdl);
     PIN_setOutputValue(ledPinHandle, Board_PIN_GLED, 1);
-    max9860_I2C_Shutdown_state(0);//disable shutdown_mode
-    //ProjectZero_enqueueMsg(PZ_APP_MSG_Load_vol, NULL);// read global vol level
+
     osal_snv_read(INIT_VOL_ADDR, 1, &current_volume);
+    max9860_I2C_Shutdown_state(0);//disable shutdown_mode
+    max9860_I2C_Volume_update(current_volume);
+
+    ProjectZero_enqueueMsg(PZ_APP_MSG_Load_vol, NULL);// read global vol level
     PIN_setOutputValue(ledPinHandle, Board_PIN_GLED, 1);
-    GPTimerCC26XX_setLoadValue(samp_tim_hdl, (GPTimerCC26XX_Value)SAMP_TIME);
-    GPTimerCC26XX_start(samp_tim_hdl);
     GPTimerCC26XX_start(measure_tim_hdl);
     stream_on = 1;
 #ifdef LOGGING
@@ -477,7 +475,6 @@ void stop_voice_handle(void)
 //    memset(&event_BLE_message, 0, sizeof(event_BLE_message)) ;
 //    memset(&event_BUF_status_message, 0, sizeof(event_BUF_status_message)) ;
 #endif
-    GPTimerCC26XX_stop(samp_tim_hdl);
     GPTimerCC26XX_stop(measure_tim_hdl);
 
     /* stop I2S stream */
@@ -533,11 +530,6 @@ void HandsFree_init (void)
     GPTimerCC26XX_setLoadValue(blink_tim_hdl, (GPTimerCC26XX_Value)LOW_STATE_TIME);
     GPTimerCC26XX_registerInterrupt(blink_tim_hdl, blink_timer_callback, GPT_INT_TIMEOUT);
     GPTimerCC26XX_start(blink_tim_hdl);
-
-    samp_tim_hdl = GPTimerCC26XX_open(Board_GPTIMER3A, &tim_params);
-    if (samp_tim_hdl == NULL) {
-        while (1);
-    }
 
     measure_tim_hdl = GPTimerCC26XX_open(Board_GPTIMER1A, &tim_params);
     if (measure_tim_hdl == NULL) {
@@ -675,7 +667,6 @@ void blink_timer_callback(GPTimerCC26XX_Handle handle, GPTimerCC26XX_IntMask int
         PIN_setOutputValue(ledPinHandle, Board_PIN_GLED, 0);
     }
 
-//    ProjectZero_enqueueMsg(PZ_APP_MSG_Blinking, NULL);
 }
 
 
@@ -1066,17 +1057,6 @@ void ProjectZero_DataService_ValueChangeHandler(
     }
 }
 
-
-
-//static void bufRdy_callback(I2SCC26XX_Handle handle, I2SCC26XX_StreamNotification *pStreamNotification)
-//{
-//    I2SCC26XX_Status streamStatus = pStreamNotification->status;
-//
-//    if (streamStatus == I2SCC26XX_STREAM_BUFFER_READY || streamStatus == I2SCC26XX_STREAM_BUFFER_READY_BUT_NO_AVAILABLE_BUFFERS)
-//    {
-//        gotBufferInOut = true;
-//    }
-//}
 
 /*********************************************************************
  * @fn      AudioDuplex_disableCache
