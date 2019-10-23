@@ -153,10 +153,15 @@ void I2S_user_init (void)
     I2S_Params_init(&i2sParams);
     i2sParams.fixedBufferLength     = I2S_SAMP_PER_FRAME * 2;
     i2sParams.samplingFrequency     = 16000;
+    i2sParams.memorySlotLength      = I2S_MEMORY_LENGTH_16BITS;
+    i2sParams.beforeWordPadding     = 0;
+    i2sParams.afterWordPadding      = 0;
+    i2sParams.isMSBFirst            = (bool)true;
     i2sParams.writeCallback         = writeCallbackFxn ;
     i2sParams.readCallback          = readCallbackFxn ;
     i2sParams.errorCallback         = errCallbackFxn;
     i2sParams.MCLKDivider           = 4;
+    i2sParams.bitsPerWord           = 16;
     i2sParams.SD0Channels           = I2S_CHANNELS_MONO_INV;
     i2sParams.SD1Channels           = I2S_CHANNELS_MONO_INV;
     i2sParams.moduleRole            = I2S_MASTER;
@@ -210,13 +215,13 @@ void I2S_user_init (void)
 
     I2S_setWriteQueueHead(i2sHandle, &i2sWrite1);
 
-    for(int16_t i = 0 ; i < 500; i++)
-    {
-        writeBuf1[i] = (int16_t)(32767*sin(2*M_PI*i/20));
-        writeBuf2[i] = (int16_t)(32767*sin(2*M_PI*i/20));
-        writeBuf3[i] = (int16_t)(32767*sin(2*M_PI*i/20));
-        writeBuf4[i] = (int16_t)(32767*sin(2*M_PI*i/20));
-    }
+//    for(int16_t i = 0 ; i < 500; i++)
+//    {
+//        writeBuf1[i] = (int16_t)(32767*sin(2*M_PI*i/20));
+//        writeBuf2[i] = (int16_t)(32767*sin(2*M_PI*i/20));
+//        writeBuf3[i] = (int16_t)(32767*sin(2*M_PI*i/20));
+//        writeBuf4[i] = (int16_t)(32767*sin(2*M_PI*i/20));
+//    }
 }
 
 

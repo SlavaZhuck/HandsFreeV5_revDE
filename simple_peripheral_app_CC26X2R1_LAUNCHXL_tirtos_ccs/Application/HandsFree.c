@@ -631,14 +631,7 @@ void blink_timer_callback(GPTimerCC26XX_Handle handle, GPTimerCC26XX_IntMask int
         blink = false;
         GPTimerCC26XX_setLoadValue(blink_tim_hdl, load_val[0]);
 
-        if(!bat_low)
-        {
-            bat_low = battery_voltage < BAT_LOW_VOLTAGE;
-        }
-        else
-        {
-            PIN_setOutputValue(ledPinHandle, Board_PIN_RLED, 0);
-        }
+        PIN_setOutputValue(ledPinHandle, Board_PIN_RLED, 0);
 
         if(!stream_on)
         {
@@ -650,12 +643,14 @@ void blink_timer_callback(GPTimerCC26XX_Handle handle, GPTimerCC26XX_IntMask int
         blink = true;
         GPTimerCC26XX_setLoadValue(blink_tim_hdl, load_val[1]);
 
+        bat_low = battery_voltage < BAT_LOW_VOLTAGE;
+
         if(bat_low)
         {
             PIN_setOutputValue(ledPinHandle, Board_PIN_RLED, 1);
         }
 
-         if(!stream_on)
+        if(!stream_on)
         {
             PIN_setOutputValue(ledPinHandle, Board_PIN_GLED, 1);
         }
